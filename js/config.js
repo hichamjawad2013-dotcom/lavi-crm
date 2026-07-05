@@ -4,7 +4,7 @@
 
 const LAVI_CONFIG = {
   // ── À renseigner après déploiement Apps Script ──────────────
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxh0P94-YKVIxSMbme1IUq7i5E5ZlfXFV4nIOdDlqjtmAEM2ER-XogRx3GOZfbSDGywww/exec',   // Ex: https://script.google.com/macros/s/XXXXX/exec
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxfmel2CA4LT8Ub3mV7C4FXX8I7KdKwAX--MOqtnR602EkXx9ZF_rEejDLt0fEEFMPT7A/exec',   // Déploiement v2.1
 
   // ── Google OAuth ────────────────────────────────────────────
   GOOGLE_CLIENT_ID: '486355888770-7g6gqscc5et7gi9a41qk0ijopc9n7m9t.apps.googleusercontent.com',  // À renseigner depuis Google Cloud Console
