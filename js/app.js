@@ -10,7 +10,7 @@ const App = (() => {
     // Modules à venir
     clients:    { label: 'Clients',     icon: 'user', render: (arg) => ModuleClients.render(arg) },
     prospects:  { label: 'Prospects',   icon: 'pipe', render: (arg) => ModuleProspects.render(arg) },
-    contrats:   { label: 'Contrats',    icon: 'doc',  render: () => _placeholder('Contrats', 'Génération de contrats PDF — Version 2.2') },
+    contrats:   { label: 'Contrats',    icon: 'doc',  render: () => ModuleContrats.render() },
     paiements:  { label: 'Paiements',   icon: 'cash', render: () => _placeholder('Paiements', 'Échéancier dynamique — Version 2.2') },
     brokers:    { label: 'Brokers',     icon: 'brok', render: () => _placeholder('Brokers', 'Gestion des commissions — Version 2.3') },
     agenda:     { label: 'Agenda',      icon: 'cal',  render: () => _placeholder('Agenda', 'Agenda intégré — Version 2.3') },

@@ -60,6 +60,9 @@ const UI = (() => {
       'En attente':  'badge-en-attente',
       'En retard':   'badge-en-retard',
       'Payé':        'badge-paye',
+      'Brouillon':   'badge-brouillon',
+      'En cours':    'badge-en-cours',
+      'Annulé':      'badge-annule',
     };
     const cls = map[statut] || 'badge-en-attente';
     return `<span class="badge ${cls}">${statut || '—'}</span>`;
