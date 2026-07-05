@@ -237,9 +237,10 @@ function migrateAddEtapePipeline() {
 // ============================================================
 // PLANS — Recherche du PDF correspondant à un bien dans Drive
 // ============================================================
-// Le dossier LAVI_Plans est le dossier Drive dont H:\Mon Drive\CRM\LAVI_Plans
-// est le miroir local (Google Drive pour bureau). Apps Script ne peut pas lire
-// le disque local : on passe donc par DriveApp avec l'ID du dossier Drive.
+// Le dossier Plans_des_appartements est le dossier Drive dont
+// H:\Mon Drive\CRM2\Plans_des_appartements est le miroir local (Google Drive
+// pour bureau). Apps Script ne peut pas lire le disque local : on passe donc
+// par DriveApp avec l'ID du dossier Drive.
 // Convention : le fichier s'appelle exactement "<Code du bien>.pdf".
 function getPlanUrl(code) {
   if (!code) return { success: false, error: 'Code bien manquant.' };

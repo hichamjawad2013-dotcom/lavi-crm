@@ -579,7 +579,7 @@ const ModuleBiens = (() => {
     if (result.success) {
       renderEmbed(result.previewUrl, result.url);
     } else {
-      renderEmpty(`Aucun plan trouvé dans LAVI_Plans pour "${bien.Code}.pdf".`);
+      renderEmpty(result.error || `Aucun plan trouvé dans Plans_des_appartements pour "${bien.Code}.pdf".`);
     }
   }
 
