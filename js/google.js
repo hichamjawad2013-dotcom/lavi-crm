@@ -49,8 +49,27 @@ const GoogleAPI = (() => {
   async function _call(payload) {
     const user = Auth.getUser();
     if (!user) return { success: false, error: 'Non authentifié.' };
-    const fullPayload = { ...payload, email: user.email };
-    return isHostedOnAppsScript() ? _callHosted(fullPayload) : _callRemote(fullPayload);
+
+    // Mode hébergé (google.script.run) : l'identité est garantie par la session
+    // Google côté serveur, aucun jeton à transmettre.
+    if (isHostedOnAppsScript()) {
+      return _callHosted({ ...payload, email: user.email });
+    }
+
+    // Mode distant (GitHub Pages) : on transmet le jeton Google signé, vérifié
+    // côté serveur. L'email seul n'est plus accepté (il serait falsifiable).
+    if (Auth.tokenExpired && Auth.tokenExpired()) {
+      Auth.promptReauth && Auth.promptReauth();
+      return { success: false, error: 'Session expirée. Veuillez vous reconnecter.', authExpired: true };
+    }
+    if (!user.token) {
+      return { success: false, error: 'Session non sécurisée. Reconnectez-vous.', authExpired: true };
+    }
+    // On envoie le jeton (vérifié par le nouveau backend) ET l'email (compat.
+    // avec l'ancien backend tant qu'il n'est pas redéployé — transition sans coupure).
+    const res = await _callRemote({ ...payload, token: user.token, email: user.email });
+    if (res && res.authExpired) { Auth.promptReauth && Auth.promptReauth(); }
+    return res;
   }
 
   // ── Opérations CRUD ─────────────────────────────────────────

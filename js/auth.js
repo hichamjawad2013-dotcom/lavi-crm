@@ -18,13 +18,18 @@ const Auth = (() => {
       return;
     }
 
-    // Charger session persistée
+    // Charger session persistée — uniquement si le jeton n'est pas expiré.
     const stored = sessionStorage.getItem('lavi_user');
     if (stored) {
       try {
-        _user = JSON.parse(stored);
-        if (_user && _onLoginCb) _onLoginCb(_user);
-        return;
+        const u = JSON.parse(stored);
+        if (u && u.token && !_isJwtExpired(u.token)) {
+          _user = u;
+          if (_onLoginCb) _onLoginCb(_user);
+          return;
+        }
+        // Jeton expiré/absent : on efface et on redemande une connexion.
+        sessionStorage.removeItem('lavi_user');
       } catch(e) { sessionStorage.removeItem('lavi_user'); }
     }
 
@@ -168,6 +173,32 @@ const Auth = (() => {
   // ── Getters ─────────────────────────────────────────────────
   function getUser()  { return _user; }
   function isLogged() { return !!_user; }
+  function getToken() { return _user ? _user.token : null; }
+
+  // Le jeton d'identité Google expire ~1 h après la connexion.
+  function tokenExpired() {
+    if (!_user || !_user.token) return true;
+    return _isJwtExpired(_user.token);
+  }
+  function _isJwtExpired(token) {
+    const p = _parseJwt(token);
+    if (!p || !p.exp) return true;
+    // marge de 30 s pour éviter les rejets en limite d'expiration
+    return (p.exp * 1000) < (Date.now() + 30000);
+  }
+
+  // Reconnexion silencieuse (One Tap) : si l'utilisateur est toujours connecté
+  // à Google, un nouveau jeton frais est réémis sans ressaisie.
+  let _reauthing = false;
+  function promptReauth() {
+    if (_reauthing) return;
+    if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) return;
+    _reauthing = true;
+    try {
+      google.accounts.id.prompt(() => { _reauthing = false; });
+    } catch (e) { _reauthing = false; }
+    if (window.UI && UI.toast) UI.toast('Session expirée — reconnexion…', 'default');
+  }
 
   // ── Utilitaire JWT ──────────────────────────────────────────
   function _parseJwt(token) {
@@ -185,5 +216,5 @@ const Auth = (() => {
     else console.error('[Auth]', msg);
   }
 
-  return { init, login, logout, getUser, isLogged };
+  return { init, login, logout, getUser, isLogged, getToken, tokenExpired, promptReauth };
 })();

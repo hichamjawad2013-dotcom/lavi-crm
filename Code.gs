@@ -5,6 +5,9 @@
 
 const CONFIG = {
   SPREADSHEET_ID: '1Lk8cRsuWWWPORwaJRZGRP--CiKRfRpOpfBR0PEEKf4o',  // À renseigner après création du Google Sheet
+  // Client OAuth (doit être identique à GOOGLE_CLIENT_ID dans js/config.js).
+  // Sert à vérifier que les jetons reçus ont bien été émis pour CETTE application.
+  GOOGLE_CLIENT_ID: '486355888770-7g6gqscc5et7gi9a41qk0ijopc9n7m9t.apps.googleusercontent.com',
   SHEETS: {
     BIENS:      'Biens',
     CLIENTS:    'Clients',
@@ -47,13 +50,17 @@ function include(filename) {
 }
 
 // ── API pour le mode hébergé (google.script.run) ─────────────
-// L'email est fourni par la session Google : impossible à falsifier.
+// L'email provient EXCLUSIVEMENT de la session Google : impossible à falsifier.
+// On ne fait jamais confiance à un email transmis par le client dans ce mode.
 function api(payloadJson) {
   try {
     const payload = JSON.parse(payloadJson);
-    const email = _sessionEmail() || payload.email || '';
+    const email = _sessionEmail();
+    if (!email) {
+      return JSON.stringify({ success: false, error: 'Session Google introuvable. Reconnectez-vous.' });
+    }
     if (!isAuthorized(email)) {
-      return JSON.stringify({ success: false, error: 'Accès non autorisé pour : ' + (email || '(email inconnu)') });
+      return JSON.stringify({ success: false, error: 'Accès non autorisé pour : ' + email });
     }
     return JSON.stringify(route(payload, email));
   } catch (err) {
@@ -77,16 +84,62 @@ function _sessionEmail() {
   } catch (e) { return ''; }
 }
 
-// ── API historique (frontend hébergé ailleurs, via fetch) ────
+// ── API pour frontend hébergé ailleurs (GitHub Pages, via fetch) ──
+// SÉCURITÉ : l'identité n'est PAS déduite d'un email transmis en clair
+// (falsifiable), mais du jeton Google signé (JWT) émis à la connexion, qui
+// est vérifié ici (destinataire = notre application, non expiré, email vérifié).
 function doPost(e) {
   try {
     const payload = JSON.parse(e.postData.contents);
-    if (!isAuthorized(payload.email)) {
-      return jsonResponse({ success: false, error: 'Accès non autorisé.' });
+    const email = verifyGoogleToken(payload.token);
+    if (!email) {
+      return jsonResponse({ success: false, error: 'Authentification invalide ou expirée. Reconnectez-vous.', authExpired: true });
     }
-    return jsonResponse(route(payload, payload.email));
+    if (!isAuthorized(email)) {
+      return jsonResponse({ success: false, error: 'Accès non autorisé pour : ' + email });
+    }
+    // On route avec l'email VÉRIFIÉ par Google, jamais celui fourni par le client.
+    return jsonResponse(route(payload, email));
   } catch (err) {
     return jsonResponse({ success: false, error: err.toString() });
+  }
+}
+
+// Vérifie un jeton d'identité Google (JWT) auprès de Google et retourne
+// l'email vérifié, ou null si le jeton est invalide/expiré/étranger.
+function verifyGoogleToken(idToken) {
+  if (!idToken) return null;
+  try {
+    // Cache : évite de revérifier le même jeton à chaque requête (moins de latence).
+    const cache = CacheService.getScriptCache();
+    const key = 'tok_' + Utilities.base64EncodeWebSafe(
+      Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, idToken));
+    const cached = cache.get(key);
+    if (cached) return cached;
+
+    const resp = UrlFetchApp.fetch(
+      'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken),
+      { muteHttpExceptions: true }
+    );
+    if (resp.getResponseCode() !== 200) return null;
+    const info = JSON.parse(resp.getContentText());
+    // 1. Le jeton a bien été émis pour NOTRE application (anti-réutilisation).
+    if (String(info.aud) !== String(CONFIG.GOOGLE_CLIENT_ID)) return null;
+    // 2. Émis par Google.
+    if (info.iss && !/(^|\.)accounts\.google\.com$/.test(String(info.iss).replace(/^https?:\/\//, ''))) return null;
+    // 3. Non expiré.
+    if (info.exp && (Number(info.exp) * 1000) < Date.now()) return null;
+    // 4. Email présent et vérifié.
+    if (!info.email) return null;
+    if (info.email_verified === false || info.email_verified === 'false') return null;
+
+    const email = String(info.email).trim();
+    // Mémorise jusqu'à l'expiration du jeton (plafonné à 5 min pour rester frais).
+    const ttl = Math.max(0, Math.min(300, Math.floor(Number(info.exp) - Date.now() / 1000)));
+    if (ttl > 0) cache.put(key, email, ttl);
+    return email;
+  } catch (err) {
+    return null;
   }
 }
 
