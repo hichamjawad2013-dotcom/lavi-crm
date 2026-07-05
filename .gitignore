@@ -1,0 +1,7 @@
+# Paquet généré pour l'hébergement Apps Script (non nécessaire sur GitHub Pages)
+apps_script/
+
+# Fichiers système
+Thumbs.db
+desktop.ini
+.DS_Store
