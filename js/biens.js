@@ -20,6 +20,25 @@ const ModuleBiens = (() => {
     planUrl: null,        // URL du plan du bien affiché (pour partage WhatsApp)
   };
 
+  // ── Colonne "Surface Totale" (ajoutée dans le Google Sheet) ──
+  // On tolère les variantes d'orthographe possibles de l'en-tête et on
+  // détecte la vraie clé à partir des données chargées, pour lire ET écrire
+  // dans la bonne colonne quelle que soit la façon dont elle a été nommée.
+  const _TOTAL_CANDIDATES = ['Surface Totale','Surface totale','Surface_Totale','Surface_totale','SurfaceTotale','Surface Total','Surface_Total'];
+  function _totalKey() {
+    for (const rec of _state.records) {
+      const k = _TOTAL_CANDIDATES.find(c => c in rec);
+      if (k) return k;
+    }
+    return 'Surface Totale';
+  }
+  function _surfaceTotale(b) {
+    for (const c of _TOTAL_CANDIDATES) {
+      if (b[c] !== undefined && b[c] !== null && b[c] !== '') return b[c];
+    }
+    return '';
+  }
+
   // ── Rendu principal ─────────────────────────────────────────
   function render() {
     const content = document.getElementById('content');
@@ -220,6 +239,7 @@ const ModuleBiens = (() => {
             <div class="bien-card-row"><span>Niveau</span><span>${b.Niveau||'—'}</span></div>
             <div class="bien-card-row"><span>Type</span><span>${b.Type||'—'}</span></div>
             <div class="bien-card-row"><span>Surface</span><span>${b.Surface ? b.Surface+' m²' : '—'}</span></div>
+            ${_surfaceTotale(b) ? `<div class="bien-card-row"><span>Surface totale</span><span style="font-weight:700;">${_surfaceTotale(b)} m²</span></div>` : ''}
             ${b.Terrasse ? `<div class="bien-card-row"><span>Terrasse</span><span>${b.Terrasse} m²</span></div>` : ''}
             ${b.Vue ? `<div class="bien-card-row"><span>Vue</span><span>${b.Vue}</span></div>` : ''}
             ${b.Client_Nom && b.Statut!=='Disponible' ? `<div class="bien-card-row"><span>Client</span><span style="color:var(--navy); font-weight:700;">${b.Client_Nom}</span></div>` : ''}
@@ -250,6 +270,7 @@ const ModuleBiens = (() => {
             <th>Niveau</th>
             <th>Type</th>
             <th>Surface</th>
+            <th>Surface tot.</th>
             <th>Vue</th>
             <th>Prix</th>
             <th>Statut</th>
@@ -266,6 +287,7 @@ const ModuleBiens = (() => {
               <td>${b.Niveau||'—'}</td>
               <td>${b.Type||'—'}</td>
               <td>${b.Surface ? b.Surface+' m²' : '—'}</td>
+              <td>${_surfaceTotale(b) ? '<strong>'+_surfaceTotale(b)+' m²</strong>' : '—'}</td>
               <td>${b.Vue||'—'}</td>
               <td style="font-family:var(--font-num); font-weight:600;">${UI.formatPrice(b.Prix)}</td>
               <td>${UI.badge(b.Statut)}</td>
@@ -332,6 +354,10 @@ const ModuleBiens = (() => {
             <div class="form-group">
               <label class="form-label">Surface (m²) *</label>
               <input class="form-control" id="bien-surface" type="number" min="0" placeholder="Ex: 87">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Surface totale (m²)</label>
+              <input class="form-control" id="bien-surface-totale" type="number" min="0" placeholder="Ex: 134">
             </div>
             <div class="form-group">
               <label class="form-label">Statut *</label>
@@ -465,6 +491,7 @@ const ModuleBiens = (() => {
             <div class="detail-row"><span class="dl">Niveau</span><span class="dv">${bien.Niveau||'—'}</span></div>
             <div class="detail-row"><span class="dl">Type</span><span class="dv">${bien.Type||'—'}</span></div>
             <div class="detail-row"><span class="dl">Surface</span><span class="dv">${bien.Surface ? bien.Surface+' m²' : '—'}</span></div>
+            ${_surfaceTotale(bien) ? `<div class="detail-row"><span class="dl">Surface totale</span><span class="dv" style="font-weight:800; color:var(--navy);">${_surfaceTotale(bien)} m²</span></div>` : ''}
             ${bien.Terrasse ? `<div class="detail-row"><span class="dl">Terrasse</span><span class="dv">${bien.Terrasse} m²</span></div>` : ''}
             ${bien.Jardin   ? `<div class="detail-row"><span class="dl">Jardin</span><span class="dv">${bien.Jardin} m²</span></div>` : ''}
             ${bien.Vue      ? `<div class="detail-row"><span class="dl">Vue</span><span class="dv">${bien.Vue}</span></div>` : ''}
@@ -601,6 +628,7 @@ const ModuleBiens = (() => {
     lines.push(`Réf : *${bien.Code || '—'}*`);
     lines.push(`${bien.Immeuble || '—'} · Appt ${bien.Num_Appt || '—'} · ${bien.Niveau || '—'}`);
     lines.push(`Type : ${bien.Type || '—'}${bien.Surface ? ' — ' + bien.Surface + ' m²' : ''}`);
+    if (_surfaceTotale(bien)) lines.push(`Surface totale : ${_surfaceTotale(bien)} m²`);
     if (bien.Terrasse) lines.push(`Terrasse : ${bien.Terrasse} m²`);
     if (bien.Jardin)   lines.push(`Jardin : ${bien.Jardin} m²`);
     if (bien.Vue)      lines.push(`Vue : ${bien.Vue}`);
@@ -646,6 +674,9 @@ const ModuleBiens = (() => {
       if (el) el.value = bien ? (bien[map[f]] || '') : (f === 'statut' ? 'Disponible' : '');
     });
 
+    // Surface totale : clé d'en-tête dynamique (colonne ajoutée dans le Sheet)
+    document.getElementById('bien-surface-totale').value = bien ? (_surfaceTotale(bien) || '') : '';
+
     UI.openModal('modal-bien-form');
   }
 
@@ -672,6 +703,9 @@ const ModuleBiens = (() => {
       Plan_PDF_URL:   document.getElementById('bien-plan-url').value.trim(),
       Photos_URLs:    document.getElementById('bien-photos-urls').value.trim(),
     };
+
+    // Écrit dans la colonne "Surface Totale" (clé d'en-tête réelle détectée)
+    data[_totalKey()] = document.getElementById('bien-surface-totale').value;
 
     if (!data.Code || !data.Immeuble || !data.Type || !data.Surface || !data.Prix) {
       UI.toast('Veuillez remplir tous les champs obligatoires (*).', 'error');

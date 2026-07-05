@@ -131,7 +131,7 @@ function initSheets() {
 
   const schemas = {
     Biens: [
-      'ID', 'Code', 'Immeuble', 'Num_Appt', 'Niveau', 'Type', 'Surface', 'Terrasse', 'Jardin',
+      'ID', 'Code', 'Immeuble', 'Num_Appt', 'Niveau', 'Type', 'Surface', 'Surface Totale', 'Terrasse', 'Jardin',
       'Vue', 'Prix', 'Statut', 'Commercial', 'Client_CIN', 'Client_Nom',
       'Date_Reservation', 'Date_Expiration', 'Broker', 'Commission_Pct',
       'Description', 'Photos_URLs', 'Plan_PDF_URL', 'Observations', 'Date_Modif'
