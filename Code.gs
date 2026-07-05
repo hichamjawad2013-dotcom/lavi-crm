@@ -247,20 +247,58 @@ function getPlanUrl(code) {
 
   try {
     const folder = DriveApp.getFolderById(CONFIG.PLANS_FOLDER_ID);
+
+    // 1. Correspondance exacte
     const files = folder.getFilesByName(code + '.pdf');
-    if (!files.hasNext()) {
-      return { success: false, error: `Aucun plan trouvé pour "${code}.pdf".` };
+    if (files.hasNext()) return _planResult(files.next());
+
+    // 2. Correspondance tolérante : casse et zéros ignorés
+    //    (GH1IMM01A01 ≈ gh01imm1a1.pdf ≈ GH01IMM01A01.PDF)
+    const target = _normalizeCode(code);
+    const it = folder.getFiles();
+    while (it.hasNext()) {
+      const f = it.next();
+      const name = f.getName();
+      if (!/\.pdf$/i.test(name)) continue;
+      if (_normalizeCode(name.replace(/\.pdf$/i, '')) === target) return _planResult(f);
     }
-    const file = files.next();
-    return {
-      success: true,
-      fileId: file.getId(),
-      url: file.getUrl(),
-      previewUrl: `https://drive.google.com/file/d/${file.getId()}/preview`
-    };
+
+    return { success: false, error: `Aucun plan trouvé pour "${code}.pdf" (même en ignorant casse et zéros).` };
   } catch (err) {
     return { success: false, error: 'Erreur Drive: ' + err.toString() };
   }
+}
+
+function _planResult(file) {
+  return {
+    success: true,
+    fileId: file.getId(),
+    url: file.getUrl(),
+    previewUrl: `https://drive.google.com/file/d/${file.getId()}/preview`
+  };
+}
+
+// Normalise un code : majuscules, caractères spéciaux supprimés,
+// zéros de remplissage ignorés (GH01 → GH1, IMM01 → IMM1, A01 → A1)
+function _normalizeCode(s) {
+  return String(s).toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .replace(/([A-Z])0+(\d)/g, '$1$2');
+}
+
+// DIAGNOSTIC — À exécuter manuellement dans l'éditeur Apps Script
+// (sélectionner "testPlans" puis ▶ Exécuter, résultat dans le journal)
+function testPlans() {
+  const folder = DriveApp.getFolderById(CONFIG.PLANS_FOLDER_ID);
+  Logger.log('Dossier : ' + folder.getName());
+  const it = folder.getFiles();
+  let n = 0;
+  while (it.hasNext() && n < 10) {
+    const f = it.next();
+    Logger.log('Fichier : [' + f.getName() + ']');
+    n++;
+  }
+  Logger.log('Test GH1IMM01A01 → ' + JSON.stringify(getPlanUrl('GH1IMM01A01')));
 }
 
 // ============================================================
