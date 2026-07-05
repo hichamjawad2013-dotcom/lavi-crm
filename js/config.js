@@ -40,6 +40,37 @@ const LAVI_CONFIG = {
   // ── Pipeline commercial (module Prospects — vue Kanban) ─────
   // Champ dédié Etape_Pipeline sur la feuille Clients, indépendant de Statut.
   ETAPES_PIPELINE: ['Nouveau contact','Qualifié','Visite programmée','Offre / Négociation','Gagné','Perdu'],
+
+  // ── Contrat de réservation (données légales du promoteur) ────
+  // Servent à pré-remplir le contrat de réservation généré depuis le module Contrats.
+  // Tous ces champs restent modifiables dans le formulaire avant génération.
+  RESERVATION: {
+    RESERVANT_SOCIETE:     'AFRICASHORELINE SARL',
+    RESERVANT_GERANT:      'Monsieur BOUABID YOUSSEF',
+    RESERVANT_QUALITE:     'Gérant',
+    RESERVANT_STATUTS_DATE:'02/12/2024',
+    RESERVANT_ADRESSE:     'Capital Tower, angle Main Street et Bd Moulay Abdellah Bencherif, Étage n°17 (CFC), Casablanca',
+    PROJET_NOM:            'LAVI - P17 - DOMAINE D\'ANFA',
+    PROPRIETE_DITE:        'Domaine d\'Anfa I Lot P-17',
+    TERRAIN_SUPERFICIE:    '11494',
+    TF_MERE:               '123149/01',
+    AUTORISATION:          'GUCAS-0900/2025',
+    AUTORISATION_DATE:     '10/09/2025',
+    ACHEVEMENT_DATE:       '30/12/2027',
+    PRIX_M2_REAJUST:       '30.000',
+    INDEMNITE_PCT:         10,
+    NB_PARKING_DEFAUT:     2,
+    RC:  '656449',
+    TP:  '36008411',
+    IF:  '66185752',
+    ICE: '003632856000064',
+    // Échéancier de réservation par défaut — les 3 taux sont modifiables
+    ECHEANCIER_DEFAUT: {
+      acompte_pct:    15,
+      echeance1_pct:  10, echeance1_mois: 6,
+      echeance2_pct:  15, echeance2_mois: 12,
+    },
+  },
 };
 
 // Exporter pour les modules JS

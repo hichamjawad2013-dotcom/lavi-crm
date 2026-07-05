@@ -596,18 +596,18 @@ const ModuleBiens = (() => {
   // ── Partage WhatsApp (fiche + lien du plan) ──────────────────
   function _buildWhatsAppMessage(bien) {
     const lines = [];
-    lines.push('🏠 *Programme LAVI — Domaine d\'Anfa, Casablanca*');
+    lines.push('*Programme LAVI — Domaine d\'Anfa, Casablanca*');
     lines.push('━━━━━━━━━━━━━━━');
-    lines.push(`📌 Réf : *${bien.Code || '—'}*`);
-    lines.push(`🏢 ${bien.Immeuble || '—'} · Appt ${bien.Num_Appt || '—'} · ${bien.Niveau || '—'}`);
-    lines.push(`🏷️ Type : ${bien.Type || '—'}${bien.Surface ? ' — ' + bien.Surface + ' m²' : ''}`);
-    if (bien.Terrasse) lines.push(`☀️ Terrasse : ${bien.Terrasse} m²`);
-    if (bien.Jardin)   lines.push(`🌿 Jardin : ${bien.Jardin} m²`);
-    if (bien.Vue)      lines.push(`🌅 Vue : ${bien.Vue}`);
-    lines.push(`💰 Prix : *${UI.formatPrice(bien.Prix)}*`);
+    lines.push(`Réf : *${bien.Code || '—'}*`);
+    lines.push(`${bien.Immeuble || '—'} · Appt ${bien.Num_Appt || '—'} · ${bien.Niveau || '—'}`);
+    lines.push(`Type : ${bien.Type || '—'}${bien.Surface ? ' — ' + bien.Surface + ' m²' : ''}`);
+    if (bien.Terrasse) lines.push(`Terrasse : ${bien.Terrasse} m²`);
+    if (bien.Jardin)   lines.push(`Jardin : ${bien.Jardin} m²`);
+    if (bien.Vue)      lines.push(`Vue : ${bien.Vue}`);
+    lines.push(`Prix : *${UI.formatPrice(bien.Prix)}*`);
     if (_state.planUrl) {
       lines.push('');
-      lines.push(`📄 Plan de l'appartement : ${_state.planUrl}`);
+      lines.push(`Plan de l'appartement : ${_state.planUrl}`);
     }
     lines.push('');
     lines.push('_AfriCapital Real Estate SA_');
