@@ -102,6 +102,7 @@ function route(payload, email) {
     case 'GET_STATS':        return getStats();
     case 'MIGRATE_PIPELINE': return migrateAddEtapePipeline();
     case 'GET_PLAN':         return getPlanUrl(payload.code);
+    case 'LIST_PLANS':       return listPlans();
     default:                 return { success: false, error: 'Action inconnue: ' + action };
   }
 }
@@ -265,6 +266,32 @@ function getPlanUrl(code) {
     }
 
     return { success: false, error: `Aucun plan trouvé pour "${code}.pdf" (même en ignorant casse et zéros).` };
+  } catch (err) {
+    return { success: false, error: 'Erreur Drive: ' + err.toString() };
+  }
+}
+
+// Liste tous les plans PDF du dossier Drive (module Documents)
+function listPlans() {
+  if (!CONFIG.PLANS_FOLDER_ID) return { success: false, error: 'Dossier des plans non configuré.' };
+  try {
+    const folder = DriveApp.getFolderById(CONFIG.PLANS_FOLDER_ID);
+    const it = folder.getFiles();
+    const files = [];
+    while (it.hasNext()) {
+      const f = it.next();
+      const name = f.getName();
+      if (!/\.pdf$/i.test(name)) continue;
+      files.push({
+        name: name,
+        code: name.replace(/\.pdf$/i, ''),
+        id: f.getId(),
+        url: f.getUrl(),
+        previewUrl: 'https://drive.google.com/file/d/' + f.getId() + '/preview'
+      });
+    }
+    files.sort((a, b) => a.name.localeCompare(b.name));
+    return { success: true, files: files, count: files.length, folderUrl: folder.getUrl() };
   } catch (err) {
     return { success: false, error: 'Erreur Drive: ' + err.toString() };
   }

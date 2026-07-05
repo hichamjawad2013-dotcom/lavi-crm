@@ -13,9 +13,9 @@ const App = (() => {
     contrats:   { label: 'Contrats',    icon: 'doc',  render: () => ModuleContrats.render() },
     paiements:  { label: 'Paiements',   icon: 'cash', render: () => ModulePaiements.render() },
     brokers:    { label: 'Brokers',     icon: 'brok', render: () => ModuleBrokers.render() },
-    agenda:     { label: 'Agenda',      icon: 'cal',  render: () => _placeholder('Agenda', 'Agenda intégré — Version 2.3') },
-    documents:  { label: 'Documents',   icon: 'fold', render: () => _placeholder('Documents', 'Documents Google Drive — Version 2.3') },
-    parametres: { label: 'Paramètres',  icon: 'gear', render: () => _placeholder('Paramètres', 'Administration et paramètres') },
+    agenda:     { label: 'Agenda',      icon: 'cal',  render: () => ModuleAgenda.render() },
+    documents:  { label: 'Documents',   icon: 'fold', render: () => ModuleDocuments.render() },
+    parametres: { label: 'Paramètres',  icon: 'gear', render: () => ModuleParametres.render() },
   };
 
   const NAV_ICONS = {

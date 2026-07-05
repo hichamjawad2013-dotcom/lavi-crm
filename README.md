@@ -25,6 +25,9 @@ LAVI_CRM_V2/
 │   ├── contrats.js         ← Module Contrats (CRUD, PDF, échéancier, réservation)
 │   ├── paiements.js        ← Module Paiements (échéances, encaissements)
 │   ├── brokers.js          ← Module Brokers (commissions)
+│   ├── agenda.js           ← Module Agenda (relances)
+│   ├── documents.js        ← Module Documents (plans Drive)
+│   ├── parametres.js       ← Module Paramètres (administration)
 │   ├── dashboard.js        ← Module Dashboard (KPIs & graphiques)
 │   └── app.js              ← Orchestrateur principal
 │
@@ -112,8 +115,9 @@ Le CRM peut aussi être servi entièrement par Apps Script (une seule URL Google
 | Contrats   | ✅ Complet    | CRUD, impression/PDF, échéancier auto, WhatsApp, contrat de réservation |
 | Paiements  | ✅ Complet    | Suivi des échéances, encaissement, retards auto, KPIs |
 | Brokers    | ✅ Complet    | CRUD + commissions calculées depuis les contrats signés |
-| Agenda     | 🔜 V2.3      | Intégration Google Calendar                   |
-| Documents  | 🔜 V2.3      | Google Drive intégré                          |
+| Agenda     | ✅ Complet    | Relances commerciales (champ Prochaine_Relance des clients) |
+| Documents  | ✅ Complet    | Plans PDF du dossier Drive, rapprochés aux biens |
+| Paramètres | ✅ Complet    | Administration : accès, listes métier, actions Sheets |
 
 ---
 

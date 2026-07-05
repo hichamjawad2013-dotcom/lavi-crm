@@ -71,5 +71,8 @@ const GoogleAPI = (() => {
   // ── Plan PDF d'un bien (recherche dans Drive par Code) ───────
   const getPlanUrl = (code) => _call({ action: 'GET_PLAN', code });
 
-  return { read, create, update, remove, initSheets, getStats, migratePipeline, getPlanUrl, isHostedOnAppsScript };
+  // ── Liste de tous les plans PDF du dossier Drive (module Documents) ──
+  const listPlans = () => _call({ action: 'LIST_PLANS' });
+
+  return { read, create, update, remove, initSheets, getStats, migratePipeline, getPlanUrl, listPlans, isHostedOnAppsScript };
 })();
