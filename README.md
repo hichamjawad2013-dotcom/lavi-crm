@@ -22,7 +22,9 @@ LAVI_CRM_V2/
 │   ├── biens.js            ← Module Biens
 │   ├── clients.js          ← Module Clients
 │   ├── prospects.js        ← Module Prospects (Kanban)
-│   ├── contrats.js         ← Module Contrats (CRUD, PDF, échéancier)
+│   ├── contrats.js         ← Module Contrats (CRUD, PDF, échéancier, réservation)
+│   ├── paiements.js        ← Module Paiements (échéances, encaissements)
+│   ├── brokers.js          ← Module Brokers (commissions)
 │   ├── dashboard.js        ← Module Dashboard (KPIs & graphiques)
 │   └── app.js              ← Orchestrateur principal
 │
@@ -107,9 +109,9 @@ Le CRM peut aussi être servi entièrement par Apps Script (une seule URL Google
 | Biens      | ✅ Complet    | Liste, grille, fiche, CRUD complet            |
 | Clients    | ✅ Complet    | CRM clients complet                           |
 | Prospects  | ✅ Complet    | Pipeline Kanban                               |
-| Contrats   | ✅ Complet    | CRUD, impression/PDF, échéancier auto, WhatsApp |
-| Paiements  | 🔜 V2.2      | Échéancier dynamique (lignes générées depuis Contrats) |
-| Brokers    | 🔜 V2.3      | Commissions                                   |
+| Contrats   | ✅ Complet    | CRUD, impression/PDF, échéancier auto, WhatsApp, contrat de réservation |
+| Paiements  | ✅ Complet    | Suivi des échéances, encaissement, retards auto, KPIs |
+| Brokers    | ✅ Complet    | CRUD + commissions calculées depuis les contrats signés |
 | Agenda     | 🔜 V2.3      | Intégration Google Calendar                   |
 | Documents  | 🔜 V2.3      | Google Drive intégré                          |
 
