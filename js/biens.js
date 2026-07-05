@@ -605,9 +605,10 @@ const ModuleBiens = (() => {
     if (bien.Jardin)   lines.push(`Jardin : ${bien.Jardin} m²`);
     if (bien.Vue)      lines.push(`Vue : ${bien.Vue}`);
     lines.push(`Prix : *${UI.formatPrice(bien.Prix)}*`);
-    if (_state.planUrl) {
+    const planUrl = _state.planUrl || bien.Plan_PDF_URL || '';
+    if (planUrl) {
       lines.push('');
-      lines.push(`Plan de l'appartement : ${_state.planUrl}`);
+      lines.push(`Plan de l'appartement : ${planUrl}`);
     }
     lines.push('');
     lines.push('_AfriCapital Real Estate SA_');
@@ -615,6 +616,9 @@ const ModuleBiens = (() => {
   }
 
   function _shareWhatsApp(bien) {
+    // Le lien du plan doit toujours partir : on privilégie le plan déjà chargé
+    // dans la fiche, sinon le champ Plan_PDF_URL saisi manuellement sur le bien.
+    if (!_state.planUrl && bien.Plan_PDF_URL) _state.planUrl = bien.Plan_PDF_URL;
     const msg = _buildWhatsAppMessage(bien);
     window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
   }
