@@ -451,7 +451,7 @@ const ModuleBiens = (() => {
 
   // ── Ouverture détail bien ────────────────────────────────────
   function _openDetail(id) {
-    const bien = _state.records.find(r => r.ID === id);
+    const bien = _state.records.find(r => String(r.ID) === String(id));
     if (!bien) return;
     _state.selectedId = id;
     _state.planUrl = null;
@@ -653,7 +653,7 @@ const ModuleBiens = (() => {
 
   // ── Ouverture formulaire (ajout/édition) ─────────────────────
   function openEdit(id) {
-    const bien = id ? _state.records.find(r => r.ID === id) : null;
+    const bien = id ? _state.records.find(r => String(r.ID) === String(id)) : null;
     const title = bien ? `Modifier — ${bien.Code||id}` : 'Nouveau bien';
 
     document.getElementById('modal-bien-title').textContent = title;

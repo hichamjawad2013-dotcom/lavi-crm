@@ -487,8 +487,17 @@ const ModuleContrats = (() => {
 
   // ── Ouverture détail ─────────────────────────────────────────
   function _openDetail(id) {
-    const c = _state.records.find(r => r.ID === id);
-    if (!c) return;
+    try {
+      _openDetailInner(id);
+    } catch (err) {
+      console.error('[Contrats] Ouverture fiche:', err);
+      UI.toast('Impossible d\'ouvrir la fiche : ' + err.message, 'error', 6000);
+    }
+  }
+
+  function _openDetailInner(id) {
+    const c = _state.records.find(r => String(r.ID) === String(id));
+    if (!c) { UI.toast('Contrat introuvable (ID: ' + id + ').', 'error'); return; }
     _state.selectedId = id;
 
     document.getElementById('detail-contrat-title').textContent = `Contrat ${c.Reference || id}`;
@@ -608,7 +617,7 @@ const ModuleContrats = (() => {
 
   // ── Ouverture formulaire (ajout/édition) ─────────────────────
   function openEdit(id) {
-    const c = id ? _state.records.find(r => r.ID === id) : null;
+    const c = id ? _state.records.find(r => String(r.ID) === String(id)) : null;
     document.getElementById('modal-contrat-title').textContent = c ? `Modifier — ${c.Reference||id}` : 'Nouveau contrat';
     document.getElementById('contrat-form-id').value = id || '';
 
@@ -712,7 +721,7 @@ const ModuleContrats = (() => {
 
   // ── Suppression ──────────────────────────────────────────────
   async function _delete(id) {
-    const c = _state.records.find(r => r.ID === id);
+    const c = _state.records.find(r => String(r.ID) === String(id));
     if (!UI.confirm(`Supprimer le contrat ${c?.Reference||id} ? Action irréversible.`)) return;
     const result = await GoogleAPI.remove(SHEET, id);
     UI.toast(result.success ? 'Contrat supprimé.' : 'Erreur: ' + result.error, result.success?'success':'error');
@@ -723,7 +732,7 @@ const ModuleContrats = (() => {
   // ÉCHÉANCIER — génération des lignes de paiement
   // ============================================================
   function openEcheancier(id) {
-    const c = _state.records.find(r => r.ID === id);
+    const c = _state.records.find(r => String(r.ID) === String(id));
     if (!c) return;
     UI.closeModal('modal-contrat-detail');
     document.getElementById('echeancier-contrat-id').value = id;
@@ -781,7 +790,7 @@ const ModuleContrats = (() => {
 
   function _renderEcheancierPreview() {
     const id = document.getElementById('echeancier-contrat-id').value;
-    const c = _state.records.find(r => r.ID === id);
+    const c = _state.records.find(r => String(r.ID) === String(id));
     if (!c) return;
     const rows = _buildEcheancier(c);
     const total = rows.reduce((s, r) => s + r.Montant, 0);
@@ -806,7 +815,7 @@ const ModuleContrats = (() => {
 
   async function _saveEcheancier() {
     const id = document.getElementById('echeancier-contrat-id').value;
-    const c = _state.records.find(r => r.ID === id);
+    const c = _state.records.find(r => String(r.ID) === String(id));
     if (!c) return;
     const rows = _buildEcheancier(c);
 
@@ -838,7 +847,7 @@ const ModuleContrats = (() => {
   // CONTRAT DE RÉSERVATION — génération automatique
   // ============================================================
   function openReservation(id) {
-    const c = _state.records.find(r => r.ID === id);
+    const c = _state.records.find(r => String(r.ID) === String(id));
     if (!c) return;
     UI.closeModal('modal-contrat-detail');
 
@@ -932,7 +941,7 @@ const ModuleContrats = (() => {
 
   function _generateReservationDoc() {
     const id = document.getElementById('resv-contrat-id').value;
-    const c = _state.records.find(r => r.ID === id) || {};
+    const c = _state.records.find(r => String(r.ID) === String(id)) || {};
     const R = LAVI_CONFIG.RESERVATION;
     const p = _resvParams();
 
@@ -1130,7 +1139,7 @@ const ModuleContrats = (() => {
   // IMPRESSION / PDF du contrat
   // ============================================================
   function printContrat(id) {
-    const c = _state.records.find(r => r.ID === id);
+    const c = _state.records.find(r => String(r.ID) === String(id));
     if (!c) return;
     const bien = _state.biens.find(b => b.Code === c.Code_Bien) || {};
     const client = _state.clients.find(cl => cl.CIN === c.Client_CIN) || {};
@@ -1212,7 +1221,7 @@ const ModuleContrats = (() => {
 
   // ── Partage WhatsApp ─────────────────────────────────────────
   function shareWhatsApp(id) {
-    const c = _state.records.find(r => r.ID === id);
+    const c = _state.records.find(r => String(r.ID) === String(id));
     if (!c) return;
     const lines = [
       '*Contrat — Programme LAVI*',
