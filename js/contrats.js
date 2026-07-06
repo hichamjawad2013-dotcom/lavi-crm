@@ -32,10 +32,10 @@ const ModuleContrats = (() => {
             <p style="font-size:13px; color:var(--muted); margin-top:2px;">Programme LAVI — Domaine d'Anfa, Casablanca</p>
           </div>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button class="btn btn-gold" id="btn-add-contrat">
+            ${Auth.isAdmin() ? `<button class="btn btn-gold" id="btn-add-contrat">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Nouveau contrat
-            </button>
+            </button>` : ''}
           </div>
         </div>
 
@@ -184,12 +184,12 @@ const ModuleContrats = (() => {
                   <td>${UI.badge(c.Etat)}</td>
                   <td>
                     <div class="td-actions">
-                      <button class="btn-icon btn-sm" title="Modifier" data-action="edit" data-id="${c.ID}">
+                      ${Auth.isAdmin() ? `<button class="btn-icon btn-sm" title="Modifier" data-action="edit" data-id="${c.ID}">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                       </button>
                       <button class="btn-icon btn-sm" title="Supprimer" data-action="delete" data-id="${c.ID}" style="color:var(--danger);">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                      </button>
+                      </button>` : ''}
                     </div>
                   </td>
                 </tr>`).join('')}

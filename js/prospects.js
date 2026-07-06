@@ -390,6 +390,14 @@ const ModuleProspects = (() => {
       btnFiche.style.display = 'none';
     }
 
+    // Affectation réservée à l'admin (le serveur l'impose de toute façon).
+    const commEl = document.getElementById('prospect-commercial');
+    if (commEl && !Auth.isAdmin()) {
+      commEl.disabled = true;
+      commEl.title = "Affectation réservée à l'administrateur";
+      commEl.style.background = '#F2EFE9';
+    }
+
     UI.openModal('modal-prospect-form');
   }
 

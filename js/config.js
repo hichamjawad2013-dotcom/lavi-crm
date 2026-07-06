@@ -17,6 +17,15 @@ const LAVI_CONFIG = {
     	'azir.hicham.10@gmail.com',
   ],
 
+  // ── Rôles (doit rester identique à USERS dans Code.gs) ──────
+  // Sert uniquement à l'UX (masquer les boutons interdits). La sécurité réelle
+  // est appliquée côté serveur. name = nom exact dans la colonne "Commercial".
+  USERS: [
+    { email: 'hichamjawad2013@gmail.com', role: 'admin',      name: 'Hicham Jawad' },
+    { email: 'h.azir@africapital.ma',     role: 'admin',      name: 'H. Azir' },
+    { email: 'azir.hicham.10@gmail.com',  role: 'commercial', name: 'Hicham Azir' },
+  ],
+
   // ── Structure Google Sheets (feuilles attendues) ─────────────
   SHEETS: {
     BIENS:      'Biens',

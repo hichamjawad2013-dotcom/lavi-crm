@@ -30,10 +30,10 @@ const ModulePaiements = (() => {
             <p style="font-size:13px; color:var(--muted); margin-top:2px;">Suivi des échéances — Programme LAVI</p>
           </div>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button class="btn btn-gold" id="btn-add-paiement">
+            ${Auth.isAdmin() ? `<button class="btn btn-gold" id="btn-add-paiement">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Nouvelle échéance
-            </button>
+            </button>` : ''}
           </div>
         </div>
 
@@ -191,7 +191,7 @@ const ModulePaiements = (() => {
                   <td>${UI.badge(et)}</td>
                   <td>
                     <div class="td-actions">
-                      ${et !== 'Payé' ? `<button class="btn-icon btn-sm" title="Marquer payé" data-action="pay" data-id="${p.ID}" style="color:#2E7D52;">
+                      ${Auth.isAdmin() ? `${et !== 'Payé' ? `<button class="btn-icon btn-sm" title="Marquer payé" data-action="pay" data-id="${p.ID}" style="color:#2E7D52;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="20 6 9 17 4 12"/></svg>
                       </button>` : ''}
                       <button class="btn-icon btn-sm" title="Modifier" data-action="edit" data-id="${p.ID}">
@@ -199,7 +199,7 @@ const ModulePaiements = (() => {
                       </button>
                       <button class="btn-icon btn-sm" title="Supprimer" data-action="delete" data-id="${p.ID}" style="color:var(--danger);">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                      </button>
+                      </button>` : '<span style="font-size:11px;color:var(--muted);">—</span>'}
                     </div>
                   </td>
                 </tr>`;

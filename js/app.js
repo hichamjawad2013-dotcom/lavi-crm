@@ -101,7 +101,7 @@ const App = (() => {
           <div class="nav-section">Outils</div>
           <div class="nav-item" data-module="agenda">${NAV_ICONS.cal} Agenda</div>
           <div class="nav-item" data-module="documents">${NAV_ICONS.fold} Documents</div>
-          <div class="nav-item" data-module="parametres">${NAV_ICONS.gear} Paramètres</div>
+          ${Auth.isAdmin() ? `<div class="nav-item" data-module="parametres">${NAV_ICONS.gear} Paramètres</div>` : ''}
         </nav>
 
         <div class="sidebar-user">
@@ -109,7 +109,8 @@ const App = (() => {
           <div class="user-info">
             <div class="user-name">${user.name || user.email}</div>
             <div class="user-role">
-              <span style="cursor:pointer; text-decoration:underline;" id="btn-logout">Déconnexion</span>
+              <span style="font-weight:700; color:var(--gold);">${Auth.isAdmin() ? 'Administrateur' : 'Commercial'}</span>
+              · <span style="cursor:pointer; text-decoration:underline;" id="btn-logout">Déconnexion</span>
             </div>
           </div>
         </div>
@@ -139,6 +140,11 @@ const App = (() => {
   // ── Navigation ───────────────────────────────────────────────
   function navigate(module, arg) {
     if (!MODULES[module]) return;
+    // Modules réservés à l'administrateur (le serveur refuse de toute façon).
+    if (module === 'parametres' && !Auth.isAdmin()) {
+      UI.toast("Accès réservé à l'administrateur.", 'error');
+      return;
+    }
     _current = module;
 
     // Mettre à jour nav active

@@ -175,6 +175,18 @@ const Auth = (() => {
   function isLogged() { return !!_user; }
   function getToken() { return _user ? _user.token : null; }
 
+  // ── Rôle (UX uniquement — la sécurité réelle est côté serveur) ──
+  // Un email autorisé mais absent de USERS est traité comme commercial
+  // (principe de moindre privilège).
+  function role() {
+    if (!_user) return null;
+    const found = (LAVI_CONFIG.USERS || []).find(
+      u => String(u.email).trim().toLowerCase() === String(_user.email || '').trim().toLowerCase()
+    );
+    return found ? found.role : 'commercial';
+  }
+  function isAdmin() { return role() === 'admin'; }
+
   // Le jeton d'identité Google expire ~1 h après la connexion.
   function tokenExpired() {
     if (!_user || !_user.token) return true;
@@ -216,5 +228,5 @@ const Auth = (() => {
     else console.error('[Auth]', msg);
   }
 
-  return { init, login, logout, getUser, isLogged, getToken, tokenExpired, promptReauth };
+  return { init, login, logout, getUser, isLogged, getToken, tokenExpired, promptReauth, role, isAdmin };
 })();

@@ -11,7 +11,7 @@ const CONFIG = {
   // TEMPORAIRE : affiche la raison exacte d'un rejet de jeton dans le message
   // d'erreur (aud, expiration, HTTP…). À repasser à false une fois le problème
   // identifié — pour ne pas divulguer de détails internes en production.
-  AUTH_DEBUG: true,
+  AUTH_DEBUG: false,
   SHEETS: {
     BIENS:      'Biens',
     CLIENTS:    'Clients',
@@ -24,6 +24,17 @@ const CONFIG = {
 	'hichamjawad2013@gmail.com',
     	'h.azir@africapital.ma',
     	'azir.hicham.10@gmail.com',
+  ],
+  // ── Rôles et affectation ────────────────────────────────────
+  // role : 'admin' (tous les droits) ou 'commercial' (droits restreints).
+  // name : DOIT correspondre EXACTEMENT au contenu de la colonne "Commercial"
+  //        des fiches (Clients, Contrats, Biens). C'est ce nom qui détermine
+  //        quelles fiches un commercial voit/modifie ("ses fiches").
+  //        ⚠️ Vérifiez l'orthographe telle qu'elle est saisie dans le Sheet.
+  USERS: [
+    { email: 'hichamjawad2013@gmail.com', role: 'admin',      name: 'Hicham Jawad' },
+    { email: 'h.azir@africapital.ma',     role: 'admin',      name: 'H. Azir' },
+    { email: 'azir.hicham.10@gmail.com',  role: 'commercial', name: 'Hicham Azir' },
   ],
   // Dossier Google Drive contenant les plans PDF, nommés exactement comme le Code du bien (ex: GH01IMM02A05.pdf)
   PLANS_FOLDER_ID: '1vpb3uJV-F4N2W3JNxnGHgRcGYD-Nro4O'
@@ -174,17 +185,43 @@ function verifyGoogleToken(idToken) {
   }
 }
 
-// ── Routeur commun ────────────────────────────────────────────
+// ── Routeur commun (avec application des droits par rôle) ─────
+// L'admin n'est jamais restreint. Le commercial est limité côté SERVEUR
+// (barrière réelle : le front ne fait que masquer les boutons).
 function route(payload, email) {
   const { action, sheet, data, filters, id } = payload;
+  const admin = isAdmin(email);
+  const me = userName(email); // nom servant au périmètre "ses fiches"
+
+  // Garde-fou global pour les commerciaux sur les actions CRUD.
+  if (!admin && ['READ', 'CREATE', 'UPDATE', 'DELETE'].indexOf(action) !== -1) {
+    const gate = commercialGate(action, sheet);
+    if (!gate.allow) return { success: false, error: gate.error };
+  }
+
   switch (action) {
-    case 'READ':             return readSheet(sheet, filters);
-    case 'CREATE':           return createRecord(sheet, data, email);
-    case 'UPDATE':           return updateRecord(sheet, id, data, email);
-    case 'DELETE':           return deleteRecord(sheet, id, email);
-    case 'INIT_SHEETS':      return initSheets();
-    case 'GET_STATS':        return getStats();
-    case 'MIGRATE_PIPELINE': return migrateAddEtapePipeline();
+    case 'READ': {
+      const res = readSheet(sheet, filters);
+      return (!admin && res.success) ? scopeRecords(res, sheet, me) : res;
+    }
+    case 'CREATE':
+      if (!admin) enforceCommercialWrite(sheet, data, me, true);
+      return createRecord(sheet, data, email);
+    case 'UPDATE':
+      if (!admin) {
+        // Clients/Prospects : uniquement SES fiches.
+        if (sheet === CONFIG.SHEETS.CLIENTS && !ownsRecord(sheet, id, me)) {
+          return { success: false, error: "Cette fiche ne vous est pas affectée — modification refusée." };
+        }
+        enforceCommercialWrite(sheet, data, me, false);
+      }
+      return updateRecord(sheet, id, data, email);
+    case 'DELETE':
+      if (!admin) return { success: false, error: "Suppression réservée à l'administrateur." };
+      return deleteRecord(sheet, id, email);
+    case 'INIT_SHEETS':      return admin ? initSheets() : { success: false, error: "Action réservée à l'administrateur." };
+    case 'GET_STATS':        return getStats(admin ? null : me);
+    case 'MIGRATE_PIPELINE': return admin ? migrateAddEtapePipeline() : { success: false, error: "Action réservée à l'administrateur." };
     case 'GET_PLAN':         return getPlanUrl(payload.code);
     case 'LIST_PLANS':       return listPlans();
     default:                 return { success: false, error: 'Action inconnue: ' + action };
@@ -192,13 +229,117 @@ function route(payload, email) {
 }
 
 // ============================================================
-// SÉCURITÉ
+// SÉCURITÉ & DROITS PAR RÔLE
 // ============================================================
 
 function isAuthorized(email) {
   if (!email) return false;
   const normalized = String(email).trim().toLowerCase();
   return CONFIG.AUTHORIZED_EMAILS.some(e => e.trim().toLowerCase() === normalized);
+}
+
+// Retourne la fiche USERS correspondant à l'email (ou null).
+function getUserRecord(email) {
+  if (!email) return null;
+  const n = String(email).trim().toLowerCase();
+  return (CONFIG.USERS || []).find(u => String(u.email).trim().toLowerCase() === n) || null;
+}
+function isAdmin(email)  { const u = getUserRecord(email); return !!u && u.role === 'admin'; }
+function userName(email) { const u = getUserRecord(email); return u ? (u.name || '') : ''; }
+
+// Comparaison de noms de commercial tolérante (casse/espaces).
+function sameName(a, b) {
+  return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+}
+
+// Champs financiers qu'un commercial ne peut JAMAIS écrire, par feuille.
+const FINANCIAL_FIELDS = {
+  Biens:     ['Prix', 'Commission_Pct'],
+  Contrats:  ['Prix_Vente', 'Commission_Pct'],
+  Paiements: ['Montant', 'Pourcentage'],
+};
+
+// Autorise/refuse une action CRUD pour un commercial (avant exécution).
+function commercialGate(action, sheet) {
+  const S = CONFIG.SHEETS;
+  switch (action) {
+    case 'READ':
+      // Tout est lisible sauf le journal ; les résultats sont ensuite filtrés
+      // sur "ses fiches" par scopeRecords().
+      if (sheet === S.HISTORIQUE) return { allow: false, error: "Journal réservé à l'administrateur." };
+      return { allow: true };
+    case 'CREATE':
+      // Création : uniquement Clients/Prospects (auto-affectés au créateur).
+      if (sheet === S.CLIENTS) return { allow: true };
+      return { allow: false, error: "Création réservée à l'administrateur pour ce module." };
+    case 'UPDATE':
+      // Modification : Clients (ses fiches) et Biens (statut/option, sans le prix).
+      if (sheet === S.CLIENTS || sheet === S.BIENS) return { allow: true };
+      return { allow: false, error: "Modification réservée à l'administrateur pour ce module." };
+    case 'DELETE':
+      return { allow: false, error: "Suppression réservée à l'administrateur." };
+    default:
+      return { allow: false, error: "Action non autorisée." };
+  }
+}
+
+// Applique les contraintes d'écriture d'un commercial (mutation de `data`) :
+// affectation verrouillée + champs financiers retirés.
+function enforceCommercialWrite(sheet, data, me, isCreate) {
+  if (!data) return;
+  const S = CONFIG.SHEETS;
+  if (sheet === S.CLIENTS) {
+    if (isCreate) data.Commercial = me;   // auto-affectation au créateur
+    else delete data.Commercial;          // réaffectation = admin uniquement
+  }
+  (FINANCIAL_FIELDS[sheet] || []).forEach(f => { delete data[f]; });
+}
+
+// Vrai si la fiche `id` de `sheetName` est affectée au commercial `me`.
+function ownsRecord(sheetName, id, me) {
+  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return false;
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const idCol = headers.indexOf('ID');
+  const comCol = headers.indexOf('Commercial');
+  if (idCol === -1 || comCol === -1) return false;
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][idCol]) === String(id)) return sameName(data[i][comCol], me);
+  }
+  return false;
+}
+
+// Restreint un résultat READ au périmètre du commercial ("ses fiches").
+function scopeRecords(res, sheet, me) {
+  const S = CONFIG.SHEETS;
+  if (sheet === S.CLIENTS || sheet === S.CONTRATS) {
+    res.records = res.records.filter(r => sameName(r.Commercial, me));
+  } else if (sheet === S.PAIEMENTS) {
+    const refs = myContractRefs(me); // paiements liés à ses contrats
+    res.records = res.records.filter(r => refs[String(r.Reference_Contrat)]);
+  }
+  // Biens (catalogue) et Brokers (annuaire) restent visibles en entier.
+  res.count = res.records.length;
+  return res;
+}
+
+// Ensemble des références de contrats appartenant au commercial `me`.
+function myContractRefs(me) {
+  const map = {};
+  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(CONFIG.SHEETS.CONTRATS);
+  if (!sheet || sheet.getLastRow() < 2) return map;
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const refCol = headers.indexOf('Reference');
+  const comCol = headers.indexOf('Commercial');
+  if (refCol === -1 || comCol === -1) return map;
+  for (let i = 1; i < data.length; i++) {
+    if (sameName(data[i][comCol], me)) map[String(data[i][refCol])] = true;
+  }
+  return map;
 }
 
 function jsonResponse(data) {
@@ -525,7 +666,9 @@ function deleteRecord(sheetName, id, email) {
 // STATISTIQUES DASHBOARD
 // ============================================================
 
-function getStats() {
+// scopeName : si fourni (commercial), les chiffres sont limités à ses fiches ;
+// null/absent pour l'admin (vue globale).
+function getStats(scopeName) {
   const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
 
   function sheetToRecords(name) {
@@ -540,11 +683,23 @@ function getStats() {
     }).filter(r => r.ID !== '');
   }
 
-  const biens      = sheetToRecords('Biens');
-  const clients    = sheetToRecords('Clients');
-  const contrats   = sheetToRecords('Contrats');
-  const paiements  = sheetToRecords('Paiements');
-  const historique = sheetToRecords('Historique');
+  let biens      = sheetToRecords('Biens');
+  let clients    = sheetToRecords('Clients');
+  let contrats   = sheetToRecords('Contrats');
+  let paiements  = sheetToRecords('Paiements');
+  let historique = sheetToRecords('Historique');
+
+  // Périmètre commercial : ne garder que ses fiches (biens gérés, ses clients,
+  // ses contrats, et les paiements liés à ses contrats).
+  if (scopeName) {
+    biens    = biens.filter(b => sameName(b.Commercial, scopeName));
+    clients  = clients.filter(c => sameName(c.Commercial, scopeName));
+    contrats = contrats.filter(c => sameName(c.Commercial, scopeName));
+    const refs = {};
+    contrats.forEach(c => { refs[String(c.Reference)] = true; });
+    paiements = paiements.filter(p => refs[String(p.Reference_Contrat)]);
+    historique = [];
+  }
 
   const now  = new Date();
   const in30 = new Date(); in30.setDate(now.getDate() + 30);
