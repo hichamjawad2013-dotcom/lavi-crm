@@ -34,7 +34,7 @@ const CONFIG = {
   USERS: [
     { email: 'hichamjawad2013@gmail.com', role: 'admin',      name: 'Hicham Jawad' },
     { email: 'h.azir@africapital.ma',     role: 'admin',      name: 'H. Azir' },
-    { email: 'azir.hicham.10@gmail.com',  role: 'commercial', name: 'Hicham Azir' },
+    { email: 'azir.hicham.10@gmail.com',  role: 'commercial', name: 'commercial01' },
   ],
   // Dossier Google Drive contenant les plans PDF, nommés exactement comme le Code du bien (ex: GH01IMM02A05.pdf)
   PLANS_FOLDER_ID: '1vpb3uJV-F4N2W3JNxnGHgRcGYD-Nro4O'

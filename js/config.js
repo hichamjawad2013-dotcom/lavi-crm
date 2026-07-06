@@ -23,7 +23,7 @@ const LAVI_CONFIG = {
   USERS: [
     { email: 'hichamjawad2013@gmail.com', role: 'admin',      name: 'Hicham Jawad' },
     { email: 'h.azir@africapital.ma',     role: 'admin',      name: 'H. Azir' },
-    { email: 'azir.hicham.10@gmail.com',  role: 'commercial', name: 'Hicham Azir' },
+    { email: 'azir.hicham.10@gmail.com',  role: 'commercial', name: 'commercial01' },
   ],
 
   // ── Structure Google Sheets (feuilles attendues) ─────────────
