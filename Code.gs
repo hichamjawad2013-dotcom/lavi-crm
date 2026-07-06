@@ -8,6 +8,10 @@ const CONFIG = {
   // Client OAuth (doit être identique à GOOGLE_CLIENT_ID dans js/config.js).
   // Sert à vérifier que les jetons reçus ont bien été émis pour CETTE application.
   GOOGLE_CLIENT_ID: '486355888770-7g6gqscc5et7gi9a41qk0ijopc9n7m9t.apps.googleusercontent.com',
+  // TEMPORAIRE : affiche la raison exacte d'un rejet de jeton dans le message
+  // d'erreur (aud, expiration, HTTP…). À repasser à false une fois le problème
+  // identifié — pour ne pas divulguer de détails internes en production.
+  AUTH_DEBUG: true,
   SHEETS: {
     BIENS:      'Biens',
     CLIENTS:    'Clients',
@@ -91,55 +95,82 @@ function _sessionEmail() {
 function doPost(e) {
   try {
     const payload = JSON.parse(e.postData.contents);
-    const email = verifyGoogleToken(payload.token);
-    if (!email) {
-      return jsonResponse({ success: false, error: 'Authentification invalide ou expirée. Reconnectez-vous.', authExpired: true });
+    const check = verifyGoogleToken(payload.token);
+    if (!check.email) {
+      // La raison précise (aud, expiration, http…) aide à diagnostiquer un
+      // rejet côté serveur. Masquée si CONFIG.AUTH_DEBUG est désactivé.
+      const msg = CONFIG.AUTH_DEBUG
+        ? 'Authentification refusée [' + check.reason + ']. Reconnectez-vous.'
+        : 'Authentification invalide ou expirée. Reconnectez-vous.';
+      return jsonResponse({ success: false, error: msg, authExpired: true });
     }
-    if (!isAuthorized(email)) {
-      return jsonResponse({ success: false, error: 'Accès non autorisé pour : ' + email });
+    if (!isAuthorized(check.email)) {
+      return jsonResponse({ success: false, error: 'Accès non autorisé pour : ' + check.email });
     }
     // On route avec l'email VÉRIFIÉ par Google, jamais celui fourni par le client.
-    return jsonResponse(route(payload, email));
+    return jsonResponse(route(payload, check.email));
   } catch (err) {
     return jsonResponse({ success: false, error: err.toString() });
   }
 }
 
-// Vérifie un jeton d'identité Google (JWT) auprès de Google et retourne
-// l'email vérifié, ou null si le jeton est invalide/expiré/étranger.
+// À EXÉCUTER UNE FOIS dans l'éditeur Apps Script (sélectionner cette fonction
+// puis ▶ Exécuter) après avoir ajouté verifyGoogleToken. Elle appelle
+// UrlFetchApp, ce qui déclenche la fenêtre d'autorisation « accès à un service
+// externe » (scope script.external_request) sans laquelle la vérification des
+// jetons échoue. Cliquez « Autoriser » : le CRM refonctionne ensuite.
+function autoriserAccesReseau() {
+  const resp = UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?id_token=x',
+    { muteHttpExceptions: true });
+  Logger.log('Autorisation réseau OK — HTTP ' + resp.getResponseCode());
+}
+
+// Vérifie un jeton d'identité Google (JWT) auprès de Google.
+// Retourne { email, reason } : email non vide si valide, sinon reason décrit
+// laquelle des vérifications a échoué (utile pour diagnostiquer un rejet).
 function verifyGoogleToken(idToken) {
-  if (!idToken) return null;
+  if (!idToken) return { email: null, reason: 'jeton absent' };
   try {
     // Cache : évite de revérifier le même jeton à chaque requête (moins de latence).
     const cache = CacheService.getScriptCache();
     const key = 'tok_' + Utilities.base64EncodeWebSafe(
       Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, idToken));
     const cached = cache.get(key);
-    if (cached) return cached;
+    if (cached) return { email: cached, reason: 'ok (cache)' };
 
     const resp = UrlFetchApp.fetch(
       'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken),
       { muteHttpExceptions: true }
     );
-    if (resp.getResponseCode() !== 200) return null;
+    if (resp.getResponseCode() !== 200) {
+      return { email: null, reason: 'tokeninfo HTTP ' + resp.getResponseCode() };
+    }
     const info = JSON.parse(resp.getContentText());
     // 1. Le jeton a bien été émis pour NOTRE application (anti-réutilisation).
-    if (String(info.aud) !== String(CONFIG.GOOGLE_CLIENT_ID)) return null;
+    if (String(info.aud) !== String(CONFIG.GOOGLE_CLIENT_ID)) {
+      return { email: null, reason: 'aud du jeton (' + info.aud + ') ≠ Client ID backend (' + CONFIG.GOOGLE_CLIENT_ID + ')' };
+    }
     // 2. Émis par Google.
-    if (info.iss && !/(^|\.)accounts\.google\.com$/.test(String(info.iss).replace(/^https?:\/\//, ''))) return null;
+    if (info.iss && !/(^|\.)accounts\.google\.com$/.test(String(info.iss).replace(/^https?:\/\//, ''))) {
+      return { email: null, reason: 'émetteur inattendu : ' + info.iss };
+    }
     // 3. Non expiré.
-    if (info.exp && (Number(info.exp) * 1000) < Date.now()) return null;
+    if (info.exp && (Number(info.exp) * 1000) < Date.now()) {
+      return { email: null, reason: 'jeton expiré' };
+    }
     // 4. Email présent et vérifié.
-    if (!info.email) return null;
-    if (info.email_verified === false || info.email_verified === 'false') return null;
+    if (!info.email) return { email: null, reason: 'email absent du jeton' };
+    if (info.email_verified === false || info.email_verified === 'false') {
+      return { email: null, reason: 'email non vérifié par Google' };
+    }
 
     const email = String(info.email).trim();
     // Mémorise jusqu'à l'expiration du jeton (plafonné à 5 min pour rester frais).
     const ttl = Math.max(0, Math.min(300, Math.floor(Number(info.exp) - Date.now() / 1000)));
     if (ttl > 0) cache.put(key, email, ttl);
-    return email;
+    return { email: email, reason: 'ok' };
   } catch (err) {
-    return null;
+    return { email: null, reason: 'exception : ' + err };
   }
 }
 
@@ -413,17 +444,32 @@ function readSheet(sheetName, filters) {
   return { success: true, records, count: records.length };
 }
 
+// Garantit qu'une colonne existe pour chaque champ de `keys`. Ajoute à la fin
+// (en-tête stylée) les colonnes manquantes et renvoie la liste d'en-têtes à jour.
+// Évite qu'une écriture sur un champ récent (ex. Etape_Pipeline) soit ignorée
+// en silence parce que la colonne n'existe pas encore dans la feuille.
+function ensureColumns(sheet, keys) {
+  const lastCol = sheet.getLastColumn();
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const missing = keys.filter(k => k && headers.indexOf(k) === -1);
+  if (missing.length) {
+    sheet.getRange(1, lastCol + 1, 1, missing.length).setValues([missing])
+      .setBackground('#1B2A38').setFontColor('#C8A96E').setFontWeight('bold');
+  }
+  return headers.concat(missing);
+}
+
 function createRecord(sheetName, data, email) {
   const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   const sheet = ss.getSheetByName(sheetName);
   if (!sheet) return { success: false, error: 'Feuille introuvable.' };
 
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const id = generateId(sheetName);
   data.ID = id;
   data.Date_Creation = data.Date_Creation || formatDate(new Date());
   data.Date_Modif = formatDate(new Date());
 
+  const headers = ensureColumns(sheet, Object.keys(data));
   const row = headers.map(h => data[h] !== undefined ? data[h] : '');
   sheet.appendRow(row);
 
@@ -436,6 +482,7 @@ function updateRecord(sheetName, id, data, email) {
   const sheet = ss.getSheetByName(sheetName);
   if (!sheet) return { success: false, error: 'Feuille introuvable.' };
 
+  ensureColumns(sheet, Object.keys(data)); // crée les colonnes manquantes avant écriture
   const allData = sheet.getDataRange().getValues();
   const headers = allData[0];
   const idCol = headers.indexOf('ID');

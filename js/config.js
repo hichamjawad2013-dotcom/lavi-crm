@@ -29,7 +29,7 @@ const LAVI_CONFIG = {
 
   // ── Valeurs métier ────────────────────────────────────────────
   IMMEUBLES: ['IMM01','IMM02','IMM03','IMM04','IMM05','IMM06','IMM07'],
-  TYPES_BIENS: ['Studio','T2','T3','T4','T5','Duplex','Penthouse','Local Commercial'],
+  TYPES_BIENS: ['Studio','F2','F3','F4','F5','Duplex','Penthouse','Local Commercial'],
   STATUTS_BIENS: ['Disponible','Option','Réservé','Vendu'],
   STATUTS_CONTRATS: ['Brouillon','En cours','Signé','Annulé'],
   STATUTS_PAIEMENTS: ['En attente','Payé','En retard','Annulé'],
