@@ -17,7 +17,8 @@ const ModuleBiens = (() => {
     filterType: '',
     search: '',
     selectedId: null,
-    planUrl: null,        // URL du plan du bien affiché (pour partage WhatsApp)
+    planUrl: null,        // URL du plan commercial affiché (pour partage WhatsApp)
+    archiUrl: null,       // URL du plan architecte affiché
   };
 
   // ── Colonne "Surface Totale" (ajoutée dans le Google Sheet) ──
@@ -455,6 +456,7 @@ const ModuleBiens = (() => {
     if (!bien) return;
     _state.selectedId = id;
     _state.planUrl = null;
+    _state.archiUrl = null;
 
     document.getElementById('detail-bien-title').textContent = `${bien.Immeuble||''} · Appt ${bien.Num_Appt||bien.Code||id}`;
 
@@ -498,9 +500,16 @@ const ModuleBiens = (() => {
           </div>
 
           <div class="detail-section">
-            <div class="detail-section-title">Plan de l'appartement</div>
+            <div class="detail-section-title">Plan commercial</div>
             <div id="detail-plan-box">
               <div style="padding:16px 0; color:var(--muted); font-size:13px;">Recherche du plan…</div>
+            </div>
+          </div>
+
+          <div class="detail-section">
+            <div class="detail-section-title">Plan architecte</div>
+            <div id="detail-archi-box">
+              <div style="padding:16px 0; color:var(--muted); font-size:13px;">Recherche du plan architecte…</div>
             </div>
           </div>
 
@@ -573,6 +582,7 @@ const ModuleBiens = (() => {
     document.getElementById('btn-whatsapp-bien')?.addEventListener('click', () => _shareWhatsApp(bien));
 
     _loadPlanSection(bien);
+    _loadArchiSection(bien);
     UI.openModal('modal-bien-detail');
   }
 
@@ -620,8 +630,43 @@ const ModuleBiens = (() => {
     }
   }
 
-  // ── Partage WhatsApp (fiche + lien du plan) ──────────────────
-  function _buildWhatsAppMessage(bien) {
+  // ── Section Plan architecte (sous-dossier "Plan Archi des appartements") ──
+  async function _loadArchiSection(bien) {
+    const box = document.getElementById('detail-archi-box');
+    if (!box) return;
+
+    const renderEmbed = (previewUrl, openUrl) => {
+      if (_state.selectedId !== bien.ID) return;
+      box.innerHTML = `
+        <div style="border:1px solid var(--sand); border-radius:var(--radius); overflow:hidden;">
+          <iframe src="${previewUrl}" style="width:100%; height:420px; border:none; display:block;" allow="autoplay"></iframe>
+        </div>
+        <a href="${openUrl}" target="_blank" style="display:inline-flex; align-items:center; gap:6px; margin-top:8px; font-size:12.5px; color:var(--navy); font-weight:600; text-decoration:underline;">
+          Ouvrir le plan architecte dans un nouvel onglet
+        </a>`;
+    };
+
+    const renderEmpty = (message) => {
+      if (_state.selectedId !== bien.ID) return;
+      box.innerHTML = `<div style="padding:14px 0; color:var(--muted); font-size:13px;">${message}</div>`;
+    };
+
+    if (!bien.Code) {
+      renderEmpty('Aucun code bien défini — impossible de rechercher le plan architecte automatiquement.');
+      return;
+    }
+
+    const result = await GoogleAPI.getArchiPlanUrl(bien.Code);
+    if (result.success) {
+      if (_state.selectedId === bien.ID) _state.archiUrl = result.url;
+      renderEmbed(result.previewUrl, result.url);
+    } else {
+      renderEmpty(result.error || `Aucun plan architecte trouvé pour "${bien.Code}.pdf".`);
+    }
+  }
+
+  // ── Partage WhatsApp (fiche PDF générée + liens des plans) ───
+  function _buildWhatsAppMessage(bien, ficheUrl, planUrl, archiUrl) {
     const lines = [];
     lines.push('*Programme LAVI — Domaine d\'Anfa, Casablanca*');
     lines.push('━━━━━━━━━━━━━━━');
@@ -633,22 +678,47 @@ const ModuleBiens = (() => {
     if (bien.Jardin)   lines.push(`Jardin : ${bien.Jardin} m²`);
     if (bien.Vue)      lines.push(`Vue : ${bien.Vue}`);
     lines.push(`Prix : *${UI.formatPrice(bien.Prix)}*`);
-    const planUrl = _state.planUrl || bien.Plan_PDF_URL || '';
-    if (planUrl) {
+    if (ficheUrl) {
       lines.push('');
-      lines.push(`Plan de l'appartement : ${planUrl}`);
+      lines.push(`📄 Fiche complète (PDF) : ${ficheUrl}`);
     }
+    if (planUrl)  lines.push(`Plan commercial : ${planUrl}`);
+    if (archiUrl) lines.push(`Plan architecte : ${archiUrl}`);
     lines.push('');
     lines.push('_AfriCapital Real Estate SA_');
     return lines.join('\n');
   }
 
-  function _shareWhatsApp(bien) {
-    // Le lien du plan doit toujours partir : on privilégie le plan déjà chargé
-    // dans la fiche, sinon le champ Plan_PDF_URL saisi manuellement sur le bien.
-    if (!_state.planUrl && bien.Plan_PDF_URL) _state.planUrl = bien.Plan_PDF_URL;
-    const msg = _buildWhatsAppMessage(bien);
-    window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+  async function _shareWhatsApp(bien) {
+    const btn = document.getElementById('btn-whatsapp-bien');
+    const original = btn ? btn.innerHTML : '';
+    // On ouvre la fenêtre TOUT DE SUITE (dans le geste utilisateur) pour éviter
+    // le blocage de pop-up ; on y injecte l'URL WhatsApp après génération.
+    const win = window.open('', '_blank');
+
+    if (btn) { btn.disabled = true; btn.innerHTML = 'Génération de la fiche PDF…'; }
+
+    let ficheUrl = '', planUrl = _state.planUrl || bien.Plan_PDF_URL || '', archiUrl = _state.archiUrl || '';
+    try {
+      const res = await GoogleAPI.generateFiche(bien);
+      if (res && res.success) {
+        ficheUrl = res.url || '';
+        planUrl  = res.planUrl  || planUrl;
+        archiUrl = res.archiUrl || archiUrl;
+        UI.toast('Fiche PDF générée.', 'success');
+      } else {
+        UI.toast('Fiche non générée (' + (res && res.error ? res.error : 'erreur') + ') — envoi du message sans PDF.', 'error');
+      }
+    } catch (e) {
+      UI.toast('Erreur lors de la génération de la fiche.', 'error');
+    }
+
+    if (btn) { btn.disabled = false; btn.innerHTML = original; }
+
+    const msg = _buildWhatsAppMessage(bien, ficheUrl, planUrl, archiUrl);
+    const waUrl = 'https://wa.me/?text=' + encodeURIComponent(msg);
+    if (win && !win.closed) { win.location.href = waUrl; }
+    else { window.open(waUrl, '_blank'); }
   }
 
   // ── Ouverture formulaire (ajout/édition) ─────────────────────

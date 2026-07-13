@@ -90,8 +90,14 @@ const GoogleAPI = (() => {
   // ── Plan PDF d'un bien (recherche dans Drive par Code) ───────
   const getPlanUrl = (code) => _call({ action: 'GET_PLAN', code });
 
+  // ── Plan architecte d'un bien (sous-dossier "Plan Archi des appartements") ──
+  const getArchiPlanUrl = (code) => _call({ action: 'GET_ARCHI_PLAN', code });
+
   // ── Liste de tous les plans PDF du dossier Drive (module Documents) ──
   const listPlans = () => _call({ action: 'LIST_PLANS' });
 
-  return { read, create, update, remove, initSheets, getStats, migratePipeline, getPlanUrl, listPlans, isHostedOnAppsScript };
+  // ── Génère la fiche PDF du bien (enregistrée sur Drive, lien partageable) ──
+  const generateFiche = (bien) => _call({ action: 'GENERATE_FICHE', bien });
+
+  return { read, create, update, remove, initSheets, getStats, migratePipeline, getPlanUrl, getArchiPlanUrl, listPlans, generateFiche, isHostedOnAppsScript };
 })();

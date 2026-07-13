@@ -37,7 +37,14 @@ const CONFIG = {
     { email: 'azir.hicham.10@gmail.com',  role: 'commercial', name: 'commercial01' },
   ],
   // Dossier Google Drive contenant les plans PDF, nommés exactement comme le Code du bien (ex: GH01IMM02A05.pdf)
-  PLANS_FOLDER_ID: '1vpb3uJV-F4N2W3JNxnGHgRcGYD-Nro4O'
+  PLANS_FOLDER_ID: '1vpb3uJV-F4N2W3JNxnGHgRcGYD-Nro4O',
+  // Plans architecte (même convention de nommage "<Code>.pdf").
+  // Priorité à ARCHI_FOLDER_ID (ID du dossier Google Drive, comme PLANS_FOLDER_ID) ;
+  // si vide, repli sur la recherche du sous-dossier ARCHI_SUBFOLDER_NAME dans PLANS_FOLDER_ID.
+  ARCHI_FOLDER_ID: '1ImLIod8cYQ2RQYnFpVHZqIwpkvtKJK9d',
+  ARCHI_SUBFOLDER_NAME: 'Plan Archi des appartements',
+  // Sous-dossier (dans PLANS_FOLDER_ID) où sont stockées les fiches PDF générées, partagées par lien.
+  FICHES_SUBFOLDER_NAME: 'Fiches_Biens'
 };
 
 // ============================================================
@@ -223,7 +230,9 @@ function route(payload, email) {
     case 'GET_STATS':        return getStats(admin ? null : me);
     case 'MIGRATE_PIPELINE': return admin ? migrateAddEtapePipeline() : { success: false, error: "Action réservée à l'administrateur." };
     case 'GET_PLAN':         return getPlanUrl(payload.code);
+    case 'GET_ARCHI_PLAN':   return getArchiPlanUrl(payload.code);
     case 'LIST_PLANS':       return listPlans();
+    case 'GENERATE_FICHE':   return generateFichePdf(payload.bien);
     default:                 return { success: false, error: 'Action inconnue: ' + action };
   }
 }
@@ -474,26 +483,62 @@ function getPlanUrl(code) {
 
   try {
     const folder = DriveApp.getFolderById(CONFIG.PLANS_FOLDER_ID);
-
-    // 1. Correspondance exacte
-    const files = folder.getFilesByName(code + '.pdf');
-    if (files.hasNext()) return _planResult(files.next());
-
-    // 2. Correspondance tolérante : casse et zéros ignorés
-    //    (GH1IMM01A01 ≈ gh01imm1a1.pdf ≈ GH01IMM01A01.PDF)
-    const target = _normalizeCode(code);
-    const it = folder.getFiles();
-    while (it.hasNext()) {
-      const f = it.next();
-      const name = f.getName();
-      if (!/\.pdf$/i.test(name)) continue;
-      if (_normalizeCode(name.replace(/\.pdf$/i, '')) === target) return _planResult(f);
-    }
-
+    const f = _findPlanFile(folder, code);
+    if (f) return _planResult(f);
     return { success: false, error: `Aucun plan trouvé pour "${code}.pdf" (même en ignorant casse et zéros).` };
   } catch (err) {
     return { success: false, error: 'Erreur Drive: ' + err.toString() };
   }
+}
+
+// Plan architecte : même convention de nommage, mais dans le sous-dossier
+// CONFIG.ARCHI_SUBFOLDER_NAME (recherché par nom dans le dossier des plans, donc
+// aucun ID supplémentaire à configurer).
+function getArchiPlanUrl(code) {
+  if (!code) return { success: false, error: 'Code bien manquant.' };
+  try {
+    const folder = _archiFolder();
+    if (!folder) {
+      return { success: false, error: `Dossier des plans architecte introuvable (ni ARCHI_FOLDER_ID, ni sous-dossier "${CONFIG.ARCHI_SUBFOLDER_NAME}").` };
+    }
+    const f = _findPlanFile(folder, code);
+    if (f) return _planResult(f);
+    return { success: false, error: `Aucun plan architecte trouvé pour "${code}.pdf".` };
+  } catch (err) {
+    return { success: false, error: 'Erreur Drive: ' + err.toString() };
+  }
+}
+
+// Résout le dossier Drive des plans architecte :
+//   1. par ID explicite (CONFIG.ARCHI_FOLDER_ID) si renseigné ;
+//   2. sinon, sous-dossier ARCHI_SUBFOLDER_NAME du dossier des plans.
+// Retourne un Folder ou null.
+function _archiFolder() {
+  if (CONFIG.ARCHI_FOLDER_ID) {
+    try { return DriveApp.getFolderById(CONFIG.ARCHI_FOLDER_ID); }
+    catch (e) { /* ID invalide → on tente le repli par nom */ }
+  }
+  if (!CONFIG.PLANS_FOLDER_ID) return null;
+  const root = DriveApp.getFolderById(CONFIG.PLANS_FOLDER_ID);
+  const subs = root.getFoldersByName(CONFIG.ARCHI_SUBFOLDER_NAME);
+  return subs.hasNext() ? subs.next() : null;
+}
+
+// Recherche le PDF "<code>.pdf" dans `folder` : correspondance exacte puis
+// tolérante (casse et zéros de remplissage ignorés). Retourne le fichier ou null.
+function _findPlanFile(folder, code) {
+  const exact = folder.getFilesByName(code + '.pdf');
+  if (exact.hasNext()) return exact.next();
+
+  const target = _normalizeCode(code);
+  const it = folder.getFiles();
+  while (it.hasNext()) {
+    const f = it.next();
+    const name = f.getName();
+    if (!/\.pdf$/i.test(name)) continue;
+    if (_normalizeCode(name.replace(/\.pdf$/i, '')) === target) return f;
+  }
+  return null;
 }
 
 // Liste tous les plans PDF du dossier Drive (module Documents)
@@ -552,6 +597,176 @@ function testPlans() {
     n++;
   }
   Logger.log('Test GH1IMM01A01 → ' + JSON.stringify(getPlanUrl('GH1IMM01A01')));
+  Logger.log('Test ARCHI GH02IMM05A04 → ' + JSON.stringify(getArchiPlanUrl('GH02IMM05A04')));
+}
+
+// ============================================================
+// FICHE PDF — Génération d'une fiche bien partageable (WhatsApp)
+// ============================================================
+// Génère un PDF de présentation du bien, l'enregistre dans un sous-dossier Drive
+// partagé « toute personne disposant du lien », et renvoie l'URL. Le front ouvre
+// ensuite WhatsApp avec un message contenant ce lien.
+function generateFichePdf(bien) {
+  if (!bien || !bien.ID) return { success: false, error: 'Bien invalide (ID manquant).' };
+  try {
+    // On relit la fiche depuis le Sheet (données de référence, prix fiable).
+    const rec = _getBienById(bien.ID) || bien;
+    const code = rec.Code || rec.ID;
+
+    // Liens des plans (commercial + architecte) — inclus dans la fiche.
+    const planCom   = getPlanUrl(code);
+    const planArchi = getArchiPlanUrl(code);
+    const planUrl   = (rec.Plan_PDF_URL || (planCom.success ? planCom.url : '')) || '';
+    const archiUrl  = planArchi.success ? planArchi.url : '';
+
+    const html = _ficheHtml(rec, planUrl, archiUrl);
+    const blob = Utilities.newBlob(html, 'text/html', 'fiche.html').getAs('application/pdf');
+    const fileName = 'Fiche_' + code + '.pdf';
+    blob.setName(fileName);
+
+    const folder = _fichesFolder();
+    // Remplace une éventuelle fiche précédente (toujours à jour).
+    const olds = folder.getFilesByName(fileName);
+    while (olds.hasNext()) olds.next().setTrashed(true);
+
+    const file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    return {
+      success: true,
+      url: file.getUrl(),
+      fileId: file.getId(),
+      downloadUrl: 'https://drive.google.com/uc?export=download&id=' + file.getId(),
+      planUrl: planUrl,
+      archiUrl: archiUrl
+    };
+  } catch (err) {
+    return { success: false, error: 'Erreur génération fiche: ' + err.toString() };
+  }
+}
+
+// Sous-dossier des fiches (créé au besoin dans le dossier des plans).
+function _fichesFolder() {
+  const root = DriveApp.getFolderById(CONFIG.PLANS_FOLDER_ID);
+  const it = root.getFoldersByName(CONFIG.FICHES_SUBFOLDER_NAME);
+  return it.hasNext() ? it.next() : root.createFolder(CONFIG.FICHES_SUBFOLDER_NAME);
+}
+
+// Relit un bien par ID depuis la feuille Biens.
+function _getBienById(id) {
+  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(CONFIG.SHEETS.BIENS);
+  if (!sheet) return null;
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const idCol = headers.indexOf('ID');
+  if (idCol === -1) return null;
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][idCol]) === String(id)) {
+      const o = {};
+      headers.forEach((h, j) => o[h] = data[i][j]);
+      return o;
+    }
+  }
+  return null;
+}
+
+// Surface totale tolérante aux variantes d'en-tête.
+function _surfaceTotaleServer(b) {
+  const cands = ['Surface Totale','Surface totale','Surface_Totale','Surface_totale','SurfaceTotale','Surface Total','Surface_Total'];
+  for (const c of cands) {
+    if (b[c] !== undefined && b[c] !== null && b[c] !== '') return b[c];
+  }
+  return '';
+}
+
+// Formatage prix : "1 850 000 DH".
+function _fmtPrice(v) {
+  const n = Number(v);
+  if (!n && n !== 0) return '—';
+  if (!n) return '—';
+  return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' DH';
+}
+
+function _esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Gabarit HTML de la fiche (converti en PDF). Charte LAVI : navy #1B2A38 / or #C8A96E.
+function _ficheHtml(b, planUrl, archiUrl) {
+  const surfTot = _surfaceTotaleServer(b);
+  const row = (label, val) => val ? `<tr><td class="l">${_esc(label)}</td><td class="v">${_esc(val)}</td></tr>` : '';
+  const dateStr = Utilities.formatDate(new Date(), 'Africa/Casablanca', 'dd/MM/yyyy');
+
+  const links = [];
+  if (planUrl)  links.push(`<div class="lk"><span>Plan commercial :</span> <a href="${_esc(planUrl)}">${_esc(planUrl)}</a></div>`);
+  if (archiUrl) links.push(`<div class="lk"><span>Plan architecte :</span> <a href="${_esc(archiUrl)}">${_esc(archiUrl)}</a></div>`);
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    * { box-sizing: border-box; }
+    body { font-family: Helvetica, Arial, sans-serif; color: #2A2A2A; margin: 0; padding: 32px 40px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #C8A96E; padding-bottom: 14px; margin-bottom: 22px; }
+    .brand { font-size: 22px; font-weight: 800; color: #1B2A38; letter-spacing: .5px; }
+    .brand small { display:block; font-size: 11px; font-weight: 600; color: #C8A96E; letter-spacing: 1.5px; text-transform: uppercase; margin-top: 3px; }
+    .meta { text-align: right; font-size: 11px; color: #7A7A7A; }
+    .banner { background: #1B2A38; border-radius: 8px; padding: 18px 22px; color: #fff; display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
+    .banner .appt-lbl { font-size: 10px; color: rgba(200,169,110,.7); letter-spacing: 1px; text-transform: uppercase; }
+    .banner .appt { font-size: 30px; font-weight: 900; color: #C8A96E; }
+    .banner .sub { font-size: 12px; color: rgba(255,255,255,.75); margin-top: 4px; }
+    .banner .code { font-size: 13px; font-weight: 700; }
+    .banner .statut { display:inline-block; margin-top:6px; font-size:11px; font-weight:700; background:#C8A96E; color:#1B2A38; padding:3px 10px; border-radius:20px; }
+    h2 { font-size: 13px; color: #1B2A38; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #E5DFD3; padding-bottom: 6px; margin: 22px 0 10px; }
+    table { width: 100%; border-collapse: collapse; }
+    td { padding: 6px 0; font-size: 13px; vertical-align: top; }
+    td.l { color: #7A7A7A; width: 45%; }
+    td.v { color: #1B2A38; font-weight: 600; }
+    .price { font-size: 22px; font-weight: 900; color: #1B2A38; }
+    .lk { font-size: 11px; margin: 5px 0; word-break: break-all; }
+    .lk span { color: #7A7A7A; }
+    .lk a { color: #1B2A38; }
+    .footer { margin-top: 34px; border-top: 1px solid #E5DFD3; padding-top: 12px; font-size: 10.5px; color: #9A9A9A; text-align: center; }
+  </style></head><body>
+    <div class="header">
+      <div class="brand">LAVI<small>Domaine d'Anfa · Casablanca</small></div>
+      <div class="meta">Réf. ${_esc(b.Code || b.ID)}<br>Édité le ${dateStr}</div>
+    </div>
+
+    <div class="banner">
+      <div>
+        <div class="appt-lbl">Appartement</div>
+        <div class="appt">${_esc(b.Num_Appt || '—')}</div>
+        <div class="sub">${_esc(b.Immeuble || '')} · ${_esc(b.Niveau || '')} · ${_esc(b.Type || '')}</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="appt-lbl">Code</div>
+        <div class="code">${_esc(b.Code || '—')}</div>
+        ${b.Statut ? `<div class="statut">${_esc(b.Statut)}</div>` : ''}
+      </div>
+    </div>
+
+    <h2>Caractéristiques</h2>
+    <table>
+      ${row('Immeuble', b.Immeuble)}
+      ${row('N° Appartement', b.Num_Appt)}
+      ${row('Niveau', b.Niveau)}
+      ${row('Type', b.Type)}
+      ${row('Surface', b.Surface ? b.Surface + ' m²' : '')}
+      ${row('Surface totale', surfTot ? surfTot + ' m²' : '')}
+      ${row('Terrasse', b.Terrasse ? b.Terrasse + ' m²' : '')}
+      ${row('Jardin', b.Jardin ? b.Jardin + ' m²' : '')}
+      ${row('Vue', b.Vue)}
+    </table>
+
+    <h2>Prix</h2>
+    <div class="price">${_fmtPrice(b.Prix)}</div>
+
+    ${links.length ? `<h2>Plans</h2>${links.join('')}` : ''}
+
+    ${b.Observations ? `<h2>Observations</h2><div style="font-size:12.5px; line-height:1.6;">${_esc(b.Observations)}</div>` : ''}
+
+    <div class="footer">AfriCapital Real Estate SA — Programme LAVI, Domaine d'Anfa, Casablanca<br>Document non contractuel · Généré automatiquement par LAVI CRM</div>
+  </body></html>`;
 }
 
 // ============================================================
